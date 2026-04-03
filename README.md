@@ -10,7 +10,7 @@ This app loads NYC collision records, cleans and normalizes the data, and provid
 
 ### Core capabilities
 
-- Reads collision data from `Motor_Vehicle_Collisions_-_Crashes.csv`.
+- Reads collision data from `Motor_Vehicle_Collisions_Crashes.csv`.
 - Parses and normalizes crash date/time for time-based analytics.
 - Applies interactive filtering by:
   - Borough
@@ -107,7 +107,7 @@ pip install -r requirements.txt
 
 ### 3) Download dataset
 
-Download the lat_long.csv and Motor_Vehicle_Collisions_-_Crashes.csv data from this google drive folder.
+Download the lat_long.csv and Motor_Vehicle_Collisions_Crashes.csv data from this google drive folder.
 https://drive.google.com/drive/folders/11n_QsW0LyjQi9prNYqGI12AoweFEhAkT?usp=sharing
 
 ### 4) Start the app
@@ -122,7 +122,7 @@ streamlit run app.py
 nyc-webapp/
 ├── app.py
 ├── requirements.txt
-├── Motor_Vehicle_Collisions_-_Crashes.csv
+├── Motor_Vehicle_Collisions_Crashes.csv
 ├── assets/
 │   ├── dashboard-hero.svg
 │   └── data-flow.svg
@@ -140,3 +140,33 @@ nyc-webapp/
 - Add downloadable PDF summary report.
 - Add logo/brand theme switch for customer-specific presentations.
 - Add anomaly detection and forecast trend modules.
+
+## Streamlit Cloud Deployment (Without Committing Large CSV)
+
+If `Motor_Vehicle_Collisions_Crashes.csv` is too large for GitHub, use a hosted direct CSV link and inject it at runtime.
+
+### 1) Host CSV file externally
+
+Upload the CSV to any storage that provides a **direct download URL** (for example: S3 public object URL, Cloudflare R2 public URL, Azure Blob SAS URL, etc.).
+
+### 2) Configure secret in Streamlit Cloud
+
+In Streamlit Cloud app settings, add this secret:
+
+```toml
+COLLISIONS_CSV_URL = "https://<your-direct-url>/Motor_Vehicle_Collisions_Crashes.csv"
+```
+
+Google Drive is also supported. You can provide either:
+
+- Direct link: `https://drive.google.com/uc?export=download&id=<FILE_ID>`
+- Share link: `https://drive.google.com/file/d/<FILE_ID>/view?usp=sharing`
+
+The app will automatically convert the Google Drive share link to a direct-download URL at runtime.
+
+### 3) Runtime behavior
+
+- Local development: app uses `./Motor_Vehicle_Collisions_Crashes.csv` if present.
+- Production (missing local file): app uses `COLLISIONS_CSV_URL` from Streamlit secrets.
+
+This keeps your repository lightweight while ensuring the CSV is available in production runtime.

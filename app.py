@@ -3,11 +3,51 @@ import pandas as pd
 import numpy as np
 import pydeck as pdk
 import plotly.express as px
+import os
+import re
+from urllib.parse import parse_qs, urlparse
 
 DATE_TIME = "date/time"
-DATA_URL = (
-    "./Motor_Vehicle_Collisions_Crashes.csv"
-)
+LOCAL_COLLISIONS_CSV = "./Motor_Vehicle_Collisions_Crashes.csv"
+
+
+def _normalize_csv_url(url):
+    """Convert supported share links (e.g. Google Drive) to direct CSV URLs."""
+    if not url:
+        return url
+
+    parsed = urlparse(url)
+    if "drive.google.com" not in parsed.netloc:
+        return url
+
+    query_params = parse_qs(parsed.query)
+    file_id = query_params.get("id", [None])[0]
+
+    if not file_id:
+        match = re.search(r"/file/d/([^/]+)", parsed.path)
+        if match:
+            file_id = match.group(1)
+
+    if not file_id:
+        return url
+
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+
+def _get_collisions_source():
+    """Resolve CSV source: local file first, then Streamlit secrets/env URL."""
+    if os.path.exists(LOCAL_COLLISIONS_CSV):
+        return LOCAL_COLLISIONS_CSV
+
+    # Streamlit Cloud supports secrets.toml for private runtime configuration.
+    if "COLLISIONS_CSV_URL" in st.secrets:
+        return _normalize_csv_url(st.secrets["COLLISIONS_CSV_URL"])
+
+    env_url = os.getenv("COLLISIONS_CSV_URL")
+    if env_url:
+        return _normalize_csv_url(env_url)
+
+    return None
 
 st.set_page_config(
     page_title="NYC Collision Intelligence Dashboard",
@@ -51,7 +91,14 @@ st.markdown(
 
 @st.cache_data
 def load_data(nrows):
-    data = pd.read_csv(DATA_URL, nrows=nrows)
+    data_source = _get_collisions_source()
+    if not data_source:
+        raise FileNotFoundError(
+            "CSV data source not found. Provide local file 'Motor_Vehicle_Collisions_Crashes.csv' "
+            "or set COLLISIONS_CSV_URL in Streamlit secrets/environment."
+        )
+
+    data = pd.read_csv(data_source, nrows=nrows)
     data[DATE_TIME] = pd.to_datetime(
         data["CRASH_DATE"].astype(str) + " " + data["CRASH_TIME"].astype(str),
         errors="coerce",
@@ -62,7 +109,15 @@ def load_data(nrows):
     data.rename(lowercase, axis="columns", inplace=True)
     return data
 
-all_data = load_data(15000)
+try:
+    all_data = load_data(15000)
+except Exception as err:
+    st.error(f"Failed to load collision data: {err}")
+    st.info(
+        "For Streamlit Cloud deployments, set a direct CSV URL in secrets as COLLISIONS_CSV_URL."
+    )
+    st.stop()
+
 if all_data.empty:
     st.error("No data was loaded. Please check the CSV file path and structure.")
     st.stop()
